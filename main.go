@@ -23,7 +23,7 @@ import (
 // Name consts need explanation, TODO
 const (
 	Name    = "MemGator"
-	Version = "1.0-rc6"
+	Version = "1.0-rc6-MKbuild"
 	Art     = `
    _____                  _______       __
   /     \  _____  _____  / _____/______/  |___________
@@ -257,6 +257,8 @@ func extractMementos(lnksplt chan string) (tml *list.List) {
 }
 
 func fetchTimemap(urir string, arch *Archive, tmCh chan *list.List, wg *sync.WaitGroup, dttmp *time.Time, sess *Session) {
+	// logError.Printf("GoGator %s",urir)
+	// logError.Printf("%s",arch.Name)
 	start := time.Now()
 	defer wg.Done()
 	url := arch.Timemap + urir
@@ -425,6 +427,7 @@ func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *lis
 			continue
 		}
 		wg.Add(1)
+		logInfo.Printf("Checking archive %s", archives[i].Name)
 		go fetchTimemap(urir, &archives[i], tmCh, &wg, dttmp, sess)
 	}
 	go func() {
@@ -576,6 +579,7 @@ func memgatorCli(urir string, format string, dttmp *time.Time) {
 }
 
 func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format string, dttmp *time.Time) {
+	// Running memgator as a service executes this code and not the CLI code
 	start := time.Now()
 	sess := new(Session)
 	sess.Start = start
@@ -586,7 +590,9 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 	defer benchmarker("SESSION", upsession, "Complete session", start, sess)
 	benchmarker("AGGREGATOR", "createsess", "Session created", start, sess)
 	logInfo.Printf("Aggregating Mementos for %s", urir)
+	logInfo.Printf("* GOGATOR: Calling function that queries each archive")
 	basetm := aggregateTimemap(urir, dttmp, sess)
+	logInfo.Printf("* GOGATOR: Done querying archives, about to respond to the client")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", "Link, Location, X-Memento-Count, X-Generator")
 	if dttmp == nil {
@@ -614,15 +620,25 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 		http.Redirect(w, r, closest, http.StatusFound)
 		return
 	}
+	w.Header().Set("X-Gator-Bait", "WE WANT BAMA! lol jk")
 	go serializeLinks(urir, basetm, format, dataCh, navonly, sess)
 	mime, ok := mimeMap[strings.ToLower(format)]
 	if ok {
 		w.Header().Set("Content-Type", mime)
 	}
 	for dt := range dataCh {
+		logError.Printf("RADON")
 		fmt.Fprint(w, dt)
 	}
 	logInfo.Printf("Total Mementos: %d in %s", basetm.Len(), time.Since(start))
+}
+
+func fetchAdditionalArchives(h string) {
+  logInfo.Printf("Long function name is long")
+  logInfo.Printf("%s",h)
+	logInfo.Printf("%d",len(h))
+	logInfo.Printf("DONE")
+	return
 }
 
 func router(w http.ResponseWriter, r *http.Request) {
@@ -636,9 +652,19 @@ func router(w http.ResponseWriter, r *http.Request) {
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
+			logError.Printf("* GOGATOR: TODO: Check for X-Add-Archive header")
 			p := strings.SplitN(requri, "/", 3)
 			format = p[1]
 			rawuri = p[2]
+			logInfo.Printf("test")
+			var moreArchives = r.Header.Get("X-More-Archives")
+			if len(moreArchives) > 0 {
+				logInfo.Printf("X-More-Archives header sent, fetching other archives' info")
+        go fetchAdditionalArchives(moreArchives)
+			} else {
+        logInfo.Printf("No additional archives specified. Use the X-More-Archives HTTP request header.")
+			}
+			return
 		} else {
 			err = fmt.Errorf("/timemap/{FORMAT}/{URI-R} (FORMAT => %s)", responseFormats)
 		}
