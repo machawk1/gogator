@@ -620,14 +620,14 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 		http.Redirect(w, r, closest, http.StatusFound)
 		return
 	}
-	w.Header().Set("X-Gator-Bait", "WE WANT BAMA! lol jk")
+	w.Header().Set("X-My-Custom-Header", "With a val")
 	go serializeLinks(urir, basetm, format, dataCh, navonly, sess)
 	mime, ok := mimeMap[strings.ToLower(format)]
 	if ok {
 		w.Header().Set("Content-Type", mime)
 	}
 	for dt := range dataCh {
-		logError.Printf("RADON")
+		logError.Printf("iteration test")
 		fmt.Fprint(w, dt)
 	}
 	logInfo.Printf("Total Mementos: %d in %s", basetm.Len(), time.Since(start))
