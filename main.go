@@ -652,7 +652,7 @@ func router(w http.ResponseWriter, r *http.Request) {
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
-			logError.Printf("* GOGATOR: TODO: Check for X-Add-Archive header")
+			logError.Printf("* GOGATOR: TODO: Check for X-Add-Archive header, extrapolate name to global")
 			p := strings.SplitN(requri, "/", 3)
 			format = p[1]
 			rawuri = p[2]
