@@ -420,6 +420,8 @@ func serializeLinks(urir string, basetm *list.List, format string, dataCh chan s
 func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *list.List) {
 	var wg sync.WaitGroup
 	tmCh := make(chan *list.List, len(archives))
+
+	var localArchiveCheckingSuccess = false
 	for i, arch := range archives {
 		if i == *topk {
 			break
@@ -429,8 +431,19 @@ func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *lis
 		}
 		wg.Add(1)
 		logInfo.Printf("Checking archive %s", archives[i].Name)
+		if strings.Contains(archives[i].Timemap, "localhost") {
+			  localArchiveCheckingSuccess = true // Let's see if my local pywb was actually added to list of archives
+		}
 		go fetchTimemap(urir, &archives[i], tmCh, &wg, dttmp, sess)
 	}
+
+  if localArchiveCheckingSuccess {
+    logInfo.Printf("SUCCESS CHECKING LOCAL ARCHIVE!")
+	} else {
+    logInfo.Printf("FAILED to check LOCAL ARCHIVE! :(")
+	}
+	os.Exit(42)
+
 	go func() {
 		wg.Wait()
 		close(tmCh)
@@ -691,10 +704,10 @@ func router(w http.ResponseWriter, r *http.Request) {
 			if len(moreArchives) > 0 {
 				logInfo.Printf("%s header sent, fetching other archives' info", MORE_ARCHIVES_HTTP_HEADER)
         go fetchAdditionalArchives(moreArchives)
+				logInfo.Printf("TODO: add returned value to (indeally copy of) global archives list")
 			} else {
         logInfo.Printf("No additional archives specified. Use the X-More-Archives HTTP request header.")
 			}
-			return
 		} else {
 			err = fmt.Errorf("/timemap/{FORMAT}/{URI-R} (FORMAT => %s)", responseFormats)
 		}
