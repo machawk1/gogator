@@ -3,6 +3,7 @@ package main
 import (
 	"container/list"
 	"encoding/json"
+	"encoding/base64"
 	"fmt"
 	flag "github.com/oduwsdl/memgator/pkg/mflag"
 	"github.com/oduwsdl/memgator/pkg/sse"
@@ -633,15 +634,44 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 	logInfo.Printf("Total Mementos: %d in %s", basetm.Len(), time.Since(start))
 }
 
-func fetchAdditionalArchives(h string) {
-  logInfo.Printf("Long function name is long")
-  logInfo.Printf("%s",h)
-	logInfo.Printf("%d",len(h))
-	logInfo.Printf("DONE")
+func isJSON(s string) bool {
+    var js map[string]interface{}
+    return json.Unmarshal([]byte(s), &js) == nil
+}
+
+func isBase64(s string) bool {
+	_, err := base64.StdEncoding.DecodeString(s)
+	return err == nil
+}
+
+func isURL(s string) bool {
+  _, err := url.ParseRequestURI(s)
+	return err == nil
+}
+
+func fetchAdditionalArchives(endpointURI string) {
+	// Should we allow MemGator to discover endpoints by querying archive or
+	//  expect the user to provide them with the HTTP header?
+	//  1. Single URI (assume TimeMap for base implementation)
+	//  TODO 2. HTTP Link-style header value RFC5988ish, applied to request
+	//  3. Raw JSON, required to be ascii per rfc2616
+	//  4. Base64-encoded JSON, similar to archives.json in reference implementation
+  logInfo.Printf("Adding new endpoint: %s",endpointURI)
+
+	if isJSON(endpointURI) { // 3
+    logInfo.Printf("* GOGATOR: JSON passed in")
+	} else if isBase64(endpointURI) { // 4
+    logInfo.Printf("* GOGATOR: base64-encoded string passed in")
+	} else if isURL(endpointURI) {
+		// e.g., http://localhost:8080/{collection key}/timemap/*/{uri}
+    logInfo.Printf("* GOGATOR: URL string passed in")
+		logInfo.Printf("* GOGATOR: TODO, add endpointURI to archives list to be subsequently queried")
+	}
 	return
 }
 
 func router(w http.ResponseWriter, r *http.Request) {
+	var MORE_ARCHIVES_HTTP_HEADER = "X-More-Archives"
 	var format, urir, rawuri, rawdtm string
 	var dttm *time.Time
 	var err error
@@ -649,17 +679,17 @@ func router(w http.ResponseWriter, r *http.Request) {
 	orequri := r.URL.RequestURI()
 	requri := strings.TrimPrefix(orequri, *root)
 	endpoint := strings.SplitN(requri, "/", 2)[0]
+
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
-			logError.Printf("* GOGATOR: TODO: Check for X-Add-Archive header, extrapolate name to global")
+			logError.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global",MORE_ARCHIVES_HTTP_HEADER)
 			p := strings.SplitN(requri, "/", 3)
-			format = p[1]
-			rawuri = p[2]
-			logInfo.Printf("test")
-			var moreArchives = r.Header.Get("X-More-Archives")
+			format = p[1] // e.g., link, json
+			rawuri = p[2] // The URI-R
+			var moreArchives = r.Header.Get(MORE_ARCHIVES_HTTP_HEADER)
 			if len(moreArchives) > 0 {
-				logInfo.Printf("X-More-Archives header sent, fetching other archives' info")
+				logInfo.Printf("%s header sent, fetching other archives' info", MORE_ARCHIVES_HTTP_HEADER)
         go fetchAdditionalArchives(moreArchives)
 			} else {
         logInfo.Printf("No additional archives specified. Use the X-More-Archives HTTP request header.")
