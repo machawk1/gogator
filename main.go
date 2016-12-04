@@ -422,6 +422,11 @@ func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *lis
 	tmCh := make(chan *list.List, len(archives))
 
 	var localArchiveCheckingSuccess = false
+
+  // Copy the base archives so as to not corrupt with additional
+  var archivesForSession = []Archive{}
+	copy(archivesForSession, archives)
+
 	for i, arch := range archives {
 		if i == *topk {
 			break
@@ -430,7 +435,7 @@ func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *lis
 			continue
 		}
 		wg.Add(1)
-		logInfo.Printf("Checking archive %s", archives[i].Name)
+		logInfo.Printf("Checking archive %s %s", archives[i].Name, archives[i].Timemap)
 		if strings.Contains(archives[i].Timemap, "localhost") {
 			  localArchiveCheckingSuccess = true // Let's see if my local pywb was actually added to list of archives
 		}
@@ -442,7 +447,7 @@ func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *lis
 	} else {
     logInfo.Printf("FAILED to check LOCAL ARCHIVE! :(")
 	}
-	os.Exit(42)
+	// os.Exit(42)
 
 	go func() {
 		wg.Wait()
@@ -641,7 +646,6 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 		w.Header().Set("Content-Type", mime)
 	}
 	for dt := range dataCh {
-		logError.Printf("iteration test")
 		fmt.Fprint(w, dt)
 	}
 	logInfo.Printf("Total Mementos: %d in %s", basetm.Len(), time.Since(start))
@@ -662,7 +666,7 @@ func isURL(s string) bool {
 	return err == nil
 }
 
-func fetchAdditionalArchives(endpointURI string) {
+func fetchAdditionalArchives(endpointURI string) Archive {
 	// Should we allow MemGator to discover endpoints by querying archive or
 	//  expect the user to provide them with the HTTP header?
 	//  1. Single URI (assume TimeMap for base implementation)
@@ -680,7 +684,7 @@ func fetchAdditionalArchives(endpointURI string) {
     logInfo.Printf("* GOGATOR: URL string passed in")
 		logInfo.Printf("* GOGATOR: TODO, add endpointURI to archives list to be subsequently queried")
 	}
-	return
+	return Archive{ID: "myArchive", Name: "My Archive", Timemap: endpointURI}
 }
 
 func router(w http.ResponseWriter, r *http.Request) {
@@ -696,17 +700,18 @@ func router(w http.ResponseWriter, r *http.Request) {
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
-			logError.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global",MORE_ARCHIVES_HTTP_HEADER)
+			logInfo.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global",MORE_ARCHIVES_HTTP_HEADER)
 			p := strings.SplitN(requri, "/", 3)
 			format = p[1] // e.g., link, json
 			rawuri = p[2] // The URI-R
 			var moreArchives = r.Header.Get(MORE_ARCHIVES_HTTP_HEADER)
 			if len(moreArchives) > 0 {
 				logInfo.Printf("%s header sent, fetching other archives' info", MORE_ARCHIVES_HTTP_HEADER)
-        go fetchAdditionalArchives(moreArchives)
+        var newArchives = fetchAdditionalArchives(moreArchives)
+				archives = append(archives,newArchives)
 				logInfo.Printf("TODO: add returned value to (indeally copy of) global archives list")
 			} else {
-        logInfo.Printf("No additional archives specified. Use the X-More-Archives HTTP request header.")
+        logInfo.Printf("No additional archives specified. Use the %s HTTP request header.",MORE_ARCHIVES_HTTP_HEADER)
 			}
 		} else {
 			err = fmt.Errorf("/timemap/{FORMAT}/{URI-R} (FORMAT => %s)", responseFormats)
