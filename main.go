@@ -3,6 +3,7 @@ package main
 import (
 	"container/list"
 	"encoding/json"
+	"encoding/base64"
 	"fmt"
 	flag "github.com/oduwsdl/memgator/pkg/mflag"
 	"github.com/oduwsdl/memgator/pkg/sse"
@@ -24,7 +25,7 @@ import (
 // Name consts need explanation, TODO
 const (
 	Name    = "MemGator"
-	Version = "1.0-rc7"
+	Version = "1.0-rc7-MKbuild"
 	Art     = `
    _____                  _______       __
   /     \  _____  _____  / _____/______/  |___________
@@ -260,6 +261,8 @@ func extractMementos(lnksplt chan string) (tml *list.List) {
 }
 
 func fetchTimemap(urir string, arch *Archive, tmCh chan *list.List, wg *sync.WaitGroup, dttmp *time.Time, sess *Session) {
+	// logError.Printf("GoGator %s",urir)
+	// logError.Printf("%s",arch.Name)
 	start := time.Now()
 	defer wg.Done()
 	url := arch.Timemap + urir
@@ -420,6 +423,13 @@ func serializeLinks(urir string, basetm *list.List, format string, dataCh chan s
 func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *list.List) {
 	var wg sync.WaitGroup
 	tmCh := make(chan *list.List, len(archives))
+
+	var localArchiveCheckingSuccess = false
+
+  // Copy the base archives so as to not corrupt with additional
+  var archivesForSession = []Archive{}
+	copy(archivesForSession, archives)
+
 	for i, arch := range archives {
 		if i == *topk {
 			break
@@ -428,8 +438,20 @@ func aggregateTimemap(urir string, dttmp *time.Time, sess *Session) (basetm *lis
 			continue
 		}
 		wg.Add(1)
+		logInfo.Printf("Checking archive %s %s", archives[i].Name, archives[i].Timemap)
+		if strings.Contains(archives[i].Timemap, "localhost") {
+			  localArchiveCheckingSuccess = true // Let's see if my local pywb was actually added to list of archives
+		}
 		go fetchTimemap(urir, &archives[i], tmCh, &wg, dttmp, sess)
 	}
+
+  if localArchiveCheckingSuccess {
+    logInfo.Printf("SUCCESS CHECKING LOCAL ARCHIVE!")
+	} else {
+    logInfo.Printf("FAILED to check LOCAL ARCHIVE! :(")
+	}
+	// os.Exit(42)
+
 	go func() {
 		wg.Wait()
 		close(tmCh)
@@ -579,6 +601,7 @@ func memgatorCli(urir string, format string, dttmp *time.Time) {
 }
 
 func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format string, dttmp *time.Time) {
+	// Running memgator as a service executes this code and not the CLI code
 	start := time.Now()
 	sess := new(Session)
 	sess.Start = start
@@ -589,7 +612,9 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 	defer benchmarker("SESSION", upsession, "Complete session", start, sess)
 	benchmarker("AGGREGATOR", "createsess", "Session created", start, sess)
 	logInfo.Printf("Aggregating Mementos for %s", urir)
+	logInfo.Printf("* GOGATOR: Calling function that queries each archive")
 	basetm := aggregateTimemap(urir, dttmp, sess)
+	logInfo.Printf("* GOGATOR: Done querying archives, about to respond to the client")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", "Link, Location, X-Memento-Count, X-Generator")
 	if dttmp == nil {
@@ -628,6 +653,7 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 		http.Redirect(w, r, closest, http.StatusFound)
 		return
 	}
+	w.Header().Set("X-My-Custom-Header", "With a val")
 	go serializeLinks(urir, basetm, format, dataCh, navonly, sess)
 	mime, ok := mimeMap[strings.ToLower(format)]
 	if ok {
@@ -639,7 +665,44 @@ func memgatorService(w http.ResponseWriter, r *http.Request, urir string, format
 	logInfo.Printf("Total Mementos: %d in %s", basetm.Len(), time.Since(start))
 }
 
+func isJSON(s string) bool {
+    var js map[string]interface{}
+    return json.Unmarshal([]byte(s), &js) == nil
+}
+
+func isBase64(s string) bool {
+	_, err := base64.StdEncoding.DecodeString(s)
+	return err == nil
+}
+
+func isURL(s string) bool {
+  _, err := url.ParseRequestURI(s)
+	return err == nil
+}
+
+func fetchAdditionalArchives(endpointURI string) Archive {
+	// Should we allow MemGator to discover endpoints by querying archive or
+	//  expect the user to provide them with the HTTP header?
+	//  1. Single URI (assume TimeMap for base implementation)
+	//  TODO 2. HTTP Link-style header value RFC5988ish, applied to request
+	//  3. Raw JSON, required to be ascii per rfc2616
+	//  4. Base64-encoded JSON, similar to archives.json in reference implementation
+  logInfo.Printf("Adding new endpoint: %s",endpointURI)
+
+	if isJSON(endpointURI) { // 3
+    logInfo.Printf("* GOGATOR: JSON passed in")
+	} else if isBase64(endpointURI) { // 4
+    logInfo.Printf("* GOGATOR: base64-encoded string passed in")
+	} else if isURL(endpointURI) {
+		// e.g., http://localhost:8080/{collection key}/timemap/*/{uri}
+    logInfo.Printf("* GOGATOR: URL string passed in")
+		logInfo.Printf("* GOGATOR: TODO, add endpointURI to archives list to be subsequently queried")
+	}
+	return Archive{ID: "myArchive", Name: "My Archive", Timemap: endpointURI}
+}
+
 func router(w http.ResponseWriter, r *http.Request) {
+	var MORE_ARCHIVES_HTTP_HEADER = "X-More-Archives"
 	var format, urir, rawuri, rawdtm string
 	var dttm *time.Time
 	var err error
@@ -647,12 +710,23 @@ func router(w http.ResponseWriter, r *http.Request) {
 	orequri := r.URL.RequestURI()
 	requri := strings.TrimPrefix(orequri, *root)
 	endpoint := strings.SplitN(requri, "/", 2)[0]
+
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
+			logInfo.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global",MORE_ARCHIVES_HTTP_HEADER)
 			p := strings.SplitN(requri, "/", 3)
-			format = p[1]
-			rawuri = p[2]
+			format = p[1] // e.g., link, json
+			rawuri = p[2] // The URI-R
+			var moreArchives = r.Header.Get(MORE_ARCHIVES_HTTP_HEADER)
+			if len(moreArchives) > 0 {
+				logInfo.Printf("%s header sent, fetching other archives' info", MORE_ARCHIVES_HTTP_HEADER)
+        var newArchives = fetchAdditionalArchives(moreArchives)
+				archives = append(archives,newArchives)
+				logInfo.Printf("TODO: add returned value to (indeally copy of) global archives list")
+			} else {
+        logInfo.Printf("No additional archives specified. Use the %s HTTP request header.",MORE_ARCHIVES_HTTP_HEADER)
+			}
 		} else {
 			err = fmt.Errorf("/timemap/{FORMAT}/{URI-R} (FORMAT => %s)", responseFormats)
 		}
