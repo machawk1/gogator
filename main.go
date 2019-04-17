@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"encoding/base64"
 	"fmt"
-	flag "github.com/oduwsdl/memgator/pkg/mflag"
-	"github.com/oduwsdl/memgator/pkg/sse"
+	flag "github.com/machawk1/gogator/pkg/mflag"
+	"github.com/machawk1/gogator/pkg/sse"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -24,14 +24,16 @@ import (
 
 // Name consts need explanation, TODO
 const (
-	Name    = "MemGator"
+	Name    = "GoGator"
 	Version = "1.0-rc7-MKbuild"
-	Art     = `
-   _____                  _______       __
-  /     \  _____  _____  / _____/______/  |___________
- /  Y Y  \/  __ \/     \/  \  ___\__  \   _/ _ \_   _ \
-/   | |   \  ___/  Y Y  \   \_\  \/ __ |  | |_| |  | \/
-\__/___\__/\____\__|_|__/\_______/_____|__|\___/|__|
+	Art     = ` 🐊
+
+ ..|'''.|           ..|'''.|            .                  
+.|'     '    ...   .|'     '   ....   .||.    ...   ... .. 
+||    .... .|  '|. ||    .... '' .||   ||   .|  '|.  ||' ''
+'|.    ||  ||   || '|.    ||  .|' ||   ||   ||   ||  ||    
+ ''|...'|   '|..|'  ''|...'|  '|..'|'  '|.'  '|..|' .||.   
+
 `
 )
 
@@ -702,7 +704,7 @@ func fetchAdditionalArchives(endpointURI string) Archive {
 }
 
 func router(w http.ResponseWriter, r *http.Request) {
-	var MORE_ARCHIVES_HTTP_HEADER = "X-More-Archives"
+	var PREFER_HEADER = "Prefer"
 	var format, urir, rawuri, rawdtm string
 	var dttm *time.Time
 	var err error
@@ -714,18 +716,18 @@ func router(w http.ResponseWriter, r *http.Request) {
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
-			logInfo.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global",MORE_ARCHIVES_HTTP_HEADER)
+			logInfo.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global", PREFER_HEADER)
 			p := strings.SplitN(requri, "/", 3)
 			format = p[1] // e.g., link, json
 			rawuri = p[2] // The URI-R
-			var moreArchives = r.Header.Get(MORE_ARCHIVES_HTTP_HEADER)
+			var moreArchives = r.Header.Get(PREFER_HEADER)
 			if len(moreArchives) > 0 {
-				logInfo.Printf("%s header sent, fetching other archives' info", MORE_ARCHIVES_HTTP_HEADER)
+				logInfo.Printf("%s header sent, fetching other archives' info", PREFER_HEADER)
         var newArchives = fetchAdditionalArchives(moreArchives)
 				archives = append(archives,newArchives)
 				logInfo.Printf("TODO: add returned value to (indeally copy of) global archives list")
 			} else {
-        logInfo.Printf("No additional archives specified. Use the %s HTTP request header.",MORE_ARCHIVES_HTTP_HEADER)
+        logInfo.Printf("No additional archives specified. Use the %s HTTP request header.", PREFER_HEADER)
 			}
 		} else {
 			err = fmt.Errorf("/timemap/{FORMAT}/{URI-R} (FORMAT => %s)", responseFormats)
