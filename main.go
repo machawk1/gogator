@@ -2,14 +2,15 @@ package main
 
 import (
 	"container/list"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	flag "github.com/machawk1/gogator/pkg/mflag"
 	"github.com/machawk1/gogator/pkg/sse"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -716,18 +717,42 @@ func router(w http.ResponseWriter, r *http.Request) {
 	switch endpoint {
 	case "timemap":
 		if regs["tmappth"].MatchString(requri) {
-			logInfo.Printf("* GOGATOR: TODO: Check for %s, extrapolate name to global", PREFER_HEADER)
 			p := strings.SplitN(requri, "/", 3)
 			format = p[1] // e.g., link, json
 			rawuri = p[2] // The URI-R
-			var moreArchives = r.Header.Get(PREFER_HEADER)
-			if len(moreArchives) > 0 {
-				logInfo.Printf("%s header sent, fetching other archives' info", PREFER_HEADER)
-        var newArchives = fetchAdditionalArchives(moreArchives)
-				archives = append(archives,newArchives)
-				logInfo.Printf("TODO: add returned value to (indeally copy of) global archives list")
+			var preferHeaderValue = r.Header.Get(PREFER_HEADER)
+
+			// Maybe try goyacc instead?
+			// > https://about.sourcegraph.com/go/gophercon-2018-how-to-write-a-parser-in-go
+			if len(preferHeaderValue) > 0 {
+				for _, prefer := range strings.Split(preferHeaderValue, ";") {
+					preferAssignment := strings.Split(prefer, "=")
+
+					if preferAssignment[0] == "archives" && len(preferAssignment) >= 2 {
+						fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[1])
+
+
+						// Check if regular URI or data URI
+						if len(preferAssignment[1]) > 5 && preferAssignment[1][1:6] == "data:" {
+							//var  dataURIComponents = strings.Split(preferAssignment[1][5:], ";")
+							println("Data URI components:")
+							mt, _, _ := mime.ParseMediaType(preferAssignment[1][6:])
+							fmt.Printf("Media type: {%}]\n", mt)
+							
+						} else {
+							fmt.Printf("No data component in Prefer header.\n")
+						}
+
+					} else {
+						fmt.Printf("No archive Prefer spec detected: %s\n", preferAssignment[0])
+					}
+				}
+				// archives="data:application/json;charset=utf-8;base64,Ww0KI...NCn0="\\ }}
+                // var newArchives = fetchAdditionalArchives(preferValue)
+				// archives = append(archives,newArchives)
+				// TODO: add returned value to (ideally copy of) global archives list")
 			} else {
-        logInfo.Printf("No additional archives specified. Use the %s HTTP request header.", PREFER_HEADER)
+                logInfo.Printf("No additional archives specified. Use the %s HTTP request header.", PREFER_HEADER)
 			}
 		} else {
 			err = fmt.Errorf("/timemap/{FORMAT}/{URI-R} (FORMAT => %s)", responseFormats)
