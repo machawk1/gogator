@@ -725,19 +725,23 @@ func router(w http.ResponseWriter, r *http.Request) {
 			// Maybe try goyacc instead?
 			// > https://about.sourcegraph.com/go/gophercon-2018-how-to-write-a-parser-in-go
 			if len(preferHeaderValue) > 0 {
-				for _, prefer := range strings.Split(preferHeaderValue, ";") {
-					preferAssignment := strings.Split(prefer, "=")
+				//TODO, cannot just split on , because value an have , in it
+				println(preferHeaderValue)
+				for _, prefer := range strings.Split(preferHeaderValue, ",") {
+					preferAssignment := strings.SplitN(prefer, "=", 2)
+					println(len(preferAssignment))
+					fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[0])
+
 
 					if preferAssignment[0] == "archives" && len(preferAssignment) >= 2 {
-						fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[1])
-
+						//fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[1])
 
 						// Check if regular URI or data URI
 						if len(preferAssignment[1]) > 5 && preferAssignment[1][1:6] == "data:" {
 							//var  dataURIComponents = strings.Split(preferAssignment[1][5:], ";")
 							println("Data URI components:")
 							mt, _, _ := mime.ParseMediaType(preferAssignment[1][6:])
-							fmt.Printf("Media type: {%}]\n", mt)
+							fmt.Printf("Media type: %s\n", mt)
 							
 						} else {
 							fmt.Printf("No data component in Prefer header.\n")
