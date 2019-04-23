@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"mime"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -81,6 +80,7 @@ var dormant = flag.Duration([]string{"d", "-dormant"}, time.Duration(15*time.Min
 // Session struct needs explanation, TODO
 type Session struct {
 	Start time.Time
+	Archives []Archive
 }
 
 // Archive struct needs explanation, TODO
@@ -727,30 +727,43 @@ func router(w http.ResponseWriter, r *http.Request) {
 			if len(preferHeaderValue) > 0 {
 				//TODO, cannot just split on , because value an have , in it
 				println(preferHeaderValue)
-				for _, prefer := range strings.Split(preferHeaderValue, ",") {
-					preferAssignment := strings.SplitN(prefer, "=", 2)
-					println(len(preferAssignment))
-					fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[0])
 
+				preferAssignment := strings.SplitN(preferHeaderValue, "=", 2)
+				println(len(preferAssignment))
+				fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[0])
 
-					if preferAssignment[0] == "archives" && len(preferAssignment) >= 2 {
-						//fmt.Printf("Prefer: archives detected, value %s\n", preferAssignment[1])
+				// Only support one K-V assignment in each Prefer for parsing simplicity...for now
+				if preferAssignment[0] == "archives" && len(preferAssignment) >= 2 {
+					// Check if regular URI or data URI
+					isADataURI := preferAssignment[1][1:6] == "data:"
+					if len(preferAssignment[1]) > 5 && isADataURI {
+						dataURI := preferAssignment[1][6:len(preferAssignment[1])-1]
+						println(dataURI)
 
-						// Check if regular URI or data URI
-						if len(preferAssignment[1]) > 5 && preferAssignment[1][1:6] == "data:" {
-							//var  dataURIComponents = strings.Split(preferAssignment[1][5:], ";")
-							println("Data URI components:")
-							mt, _, _ := mime.ParseMediaType(preferAssignment[1][6:])
-							fmt.Printf("Media type: %s\n", mt)
-							
-						} else {
-							fmt.Printf("No data component in Prefer header.\n")
+						fields := strings.SplitN(dataURI, ";", 3)
+						//mime := fields[0]
+						//charset := fields[1]
+						encodingAndData := strings.SplitN(fields[2], ",", 2)
+						//encoding := encodingAndData[0]
+						data := encodingAndData[1]
+
+						println(data)
+						decodedJSON, err := base64.StdEncoding.DecodeString(data)
+						if err != nil {
+							fmt.Println("error:", err)
+							return
 						}
+						println(decodedJSON)
+
 
 					} else {
-						fmt.Printf("No archive Prefer spec detected: %s\n", preferAssignment[0])
+						fmt.Printf("No data component in Prefer header.\n")
 					}
+
+				} else {
+					fmt.Printf("No archive Prefer spec detected: %s\n", preferAssignment[0])
 				}
+
 				// archives="data:application/json;charset=utf-8;base64,Ww0KI...NCn0="\\ }}
                 // var newArchives = fetchAdditionalArchives(preferValue)
 				// archives = append(archives,newArchives)
