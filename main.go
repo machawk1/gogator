@@ -753,13 +753,46 @@ func router(w http.ResponseWriter, r *http.Request) {
 							fmt.Println("error:", err)
 							return
 						}
-						println(decodedJSON)
+
+						fmt.Printf("%s\n", decodedJSON)
+
+						type SuppliedArchive map[string]Archive
 
 
+						/*type Archive struct {
+							ID          string  `json:"id"`
+							Name        string  `json:"name"`
+							Timemap     string  `json:"timemap"`
+							Timegate    string  `json:"timegate"`
+							Probability float64 `json:"probability"`
+							Ignore      bool    `json:"ignore"`
+							Dormant     bool    `json:"-"`
+							Failures    int     `json:"-"`
+						}*/
+
+						var archivesSupplied []SuppliedArchive
+						rr := json.Unmarshal(decodedJSON, &archivesSupplied)
+						if rr != nil {
+							fmt.Println("error parsing archives passed in:", rr)
+						}
+						for ai := range archivesSupplied {
+							fmt.Printf("%#v\n", archivesSupplied[ai])
+						}
+
+						//fmt.Printf("%+v", archivesSupplied)
+/*
+
+						pretty, err := json.MarshalIndent(archivesSupplied, "", " ")
+
+						if err != nil {
+							fmt.Println("error pretty printing:", err)
+							return
+						}
+						fmt.Printf("%s\n", pretty)
+*/
 					} else {
 						fmt.Printf("No data component in Prefer header.\n")
 					}
-
 				} else {
 					fmt.Printf("No archive Prefer spec detected: %s\n", preferAssignment[0])
 				}
