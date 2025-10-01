@@ -1,6 +1,6 @@
 # GoGator
 
-An opinionated fork of MemGator: the Memento Aggregator CLI and Server in [Go](https://golang.org/).
+An opinionated fork of [MemGator](https://github.com/oduwsdl/MemGator): the Memento Aggregator CLI and Server in [Go](https://golang.org/).
 
 ## Features
 
